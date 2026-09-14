@@ -22,6 +22,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<INoteRepository, NoteRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
     }

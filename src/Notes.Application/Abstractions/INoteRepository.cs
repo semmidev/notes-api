@@ -1,3 +1,4 @@
+using Notes.Application.Notes;
 using Notes.Domain.Entities;
 
 namespace Notes.Application.Abstractions;
@@ -8,9 +9,10 @@ namespace Notes.Application.Abstractions;
 /// </summary>
 public interface INoteRepository
 {
-    Task<IReadOnlyList<Note>> GetAllAsync(CancellationToken cancellationToken);
+    Task<(IReadOnlyList<Note> Items, long TotalCount)> GetPagedAsync(int pageNumber, int pageSize, CancellationToken cancellationToken);
     Task<Note?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task AddAsync(Note note, CancellationToken cancellationToken);
     void Remove(Note note);
     Task SaveChangesAsync(CancellationToken cancellationToken);
+    Task<NoteAnalyticsResponse> GetAnalyticsAsync(CancellationToken cancellationToken);
 }

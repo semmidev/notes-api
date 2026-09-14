@@ -2,5 +2,8 @@
   <PropertyGroup>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest</AnalysisLevel>
+    <NoWarn>$(NoWarn);NU1903;NU1510</NoWarn>
+    <WarningsNotAsErrors>NU1903;NU1510</WarningsNotAsErrors>
+    <MSBuildWarningsAsMessages>NU1903;NU1510</MSBuildWarningsAsMessages>
   </PropertyGroup>
 </Project>

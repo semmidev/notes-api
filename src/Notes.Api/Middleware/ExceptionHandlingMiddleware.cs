@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+using Notes.Application.Common.Models;
 
 namespace Notes.Api.Middleware;
 
@@ -18,34 +18,41 @@ public sealed class ExceptionHandlingMiddleware(
         catch (ArgumentException ex)
         {
             logger.LogWarning(ex, "Validasi domain gagal.");
-            await WriteProblemDetailsAsync(context, StatusCodes.Status400BadRequest, ex.Message);
+            await WriteErrorResponseAsync(
+                context,
+                StatusCodes.Status400BadRequest,
+                "VALIDATION_ERROR",
+                ex.Message);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unhandled exception pada request {Method} {Path}.", context.Request.Method, context.Request.Path);
-            await WriteProblemDetailsAsync(
+            await WriteErrorResponseAsync(
                 context,
                 StatusCodes.Status500InternalServerError,
-                "Terjadi kesalahan internal.");
+                "INTERNAL_SERVER_ERROR",
+                "Terjadi kesalahan internal pada server.");
         }
     }
 
-    private static async Task WriteProblemDetailsAsync(HttpContext context, int statusCode, string detail)
+    private static async Task WriteErrorResponseAsync(
+        HttpContext context,
+        int statusCode,
+        string errorCode,
+        string message)
     {
         if (context.Response.HasStarted)
             return;
 
         context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/problem+json";
+        context.Response.ContentType = "application/json";
 
-        var problem = new ProblemDetails
-        {
-            Status = statusCode,
-            Title = statusCode == StatusCodes.Status400BadRequest ? "Request tidak valid." : "Internal Server Error",
-            Detail = detail,
-            Instance = context.Request.Path
-        };
+        var response = ErrorResponse.Create(
+            statusCode: statusCode,
+            errorCode: errorCode,
+            message: message,
+            traceId: context.TraceIdentifier);
 
-        await context.Response.WriteAsJsonAsync(problem);
+        await context.Response.WriteAsJsonAsync(response);
     }
 }

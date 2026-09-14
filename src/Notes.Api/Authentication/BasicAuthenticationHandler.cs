@@ -84,10 +84,18 @@ public sealed class BasicAuthenticationHandler(
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
         Response.Headers.WWWAuthenticate = "Basic realm=NotesApi";
-        return Task.CompletedTask;
+        Response.ContentType = "application/json";
+
+        var error = Notes.Application.Common.Models.ErrorResponse.Create(
+            StatusCodes.Status401Unauthorized,
+            "UNAUTHORIZED",
+            "Akses ditolak. Header 'Authorization: Basic base64(username:password)' diperlukan.",
+            traceId: Context.TraceIdentifier);
+
+        await Response.WriteAsJsonAsync(error);
     }
 }

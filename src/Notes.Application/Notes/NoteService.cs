@@ -1,4 +1,5 @@
 using Notes.Application.Abstractions;
+using Notes.Application.Common.Models;
 using Notes.Domain.Entities;
 
 namespace Notes.Application.Notes;
@@ -9,10 +10,22 @@ namespace Notes.Application.Notes;
 /// </summary>
 public sealed class NoteService(INoteRepository repository)
 {
-    public async Task<IReadOnlyList<NoteResponse>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<PagedResponse<NoteResponse>> GetPagedAsync(
+        PaginationParams paginationParams,
+        CancellationToken cancellationToken)
     {
-        var notes = await repository.GetAllAsync(cancellationToken);
-        return notes.Select(ToResponse).ToList();
+        var (notes, totalCount) = await repository.GetPagedAsync(
+            paginationParams.PageNumber,
+            paginationParams.PageSize,
+            cancellationToken);
+
+        var responses = notes.Select(ToResponse).ToList();
+
+        return PagedResponse<NoteResponse>.Create(
+            responses,
+            paginationParams.PageNumber,
+            paginationParams.PageSize,
+            totalCount);
     }
 
     public async Task<NoteResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -54,6 +67,11 @@ public sealed class NoteService(INoteRepository repository)
         repository.Remove(note);
         await repository.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public Task<NoteAnalyticsResponse> GetAnalyticsAsync(CancellationToken cancellationToken)
+    {
+        return repository.GetAnalyticsAsync(cancellationToken);
     }
 
     private static NoteResponse ToResponse(Note note) => new(

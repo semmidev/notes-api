@@ -12,7 +12,9 @@ Selamat datang! Dokumen ini dibuat khusus untuk membantu pengembang yang baru me
 5. [Alur Eksekusi Request HTTP (Request Lifecycle)](#5-alur-eksekusi-request-http-request-lifecycle)
 6. [Panduan Membuat Ulang Proyek Ini dari Nol (Step-by-Step CLI)](#6-panduan-membuat-ulang-proyek-ini-dari-nol-step-by-step-cli)
 7. [Cheat Sheet Perintah CLI `dotnet`](#7-cheat-sheet-perintah-cli-dotnet)
-8. [Tips & Langkah Selanjutnya untuk Production](#8-tips--langkah-selanjutnya-untuk-production)
+8. [Manajeman Transaksi Database (`IUnitOfWork`) & Raw SQL Query Kompleks](#8-manajeman-transaksi-database-iunitofwork--raw-sql-query-kompleks)
+9. [EF Core Migrations: Konsep & Best Practices](#9-ef-core-migrations-konsep--best-practices)
+10. [Tips & Langkah Selanjutnya untuk Production](#10-tips--langkah-selanjutnya-untuk-production)
 
 ---
 
@@ -141,8 +143,12 @@ public static class ServiceCollectionExtensions
   * `AddScoped`: Instance yang sama dipakai dalam *satu siklus request HTTP*. (Paling umum untuk Service & DbContext).
   * `AddSingleton`: Hany dibuat *satu kali* selama aplikasi berjalan.
 
-### F. Async / Await & `CancellationToken`
+### F. Async / Await & `Task` / `Task<T>`
 Operasi I/O (akses DB/network) bersifat asynchronous agar server tidak *blocking*:
+
+* **`Task`** *(Tanpa `<T>`)*: Representasi operasi async yang tidak mengembalikan nilai (mirip `void`).
+* **`Task<T>`** *(Dengan `<T>`)*: Representasi operasi async yang menghasilkan nilai bertipe `T` (mirip `Promise<T>` di JS / `Future<T>` di Java).
+* **`async` / `await`**: Menandai method async dan menunggu hasil `Task` tanpa memblokir thread server Kestrel.
 
 ```csharp
 public async Task<NoteResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -152,8 +158,58 @@ public async Task<NoteResponse?> GetByIdAsync(Guid id, CancellationToken cancell
 }
 ```
 
-* `Task<T>`: Mirip `Promise<T>` di JavaScript atau `Future<T>` di Java.
-* `CancellationToken`: Digunakan untuk membatalkan query ke database jika client membatalkan request HTTP di tengah jalan.
+### G. `CancellationToken` (Graceful Cancellation)
+Token yang dikirimkan oleh ASP.NET Core ke method async. Jika client membatalkan HTTP request (misalnya menutup tab browser), `CancellationToken` membatalkan query SQL di EF Core & PostgreSQL secara otomatis agar server tidak membuang resource secara sia-sia.
+
+### H. `IActionResult` & `ActionResult<T>`
+Di Controller, `ActionResult<T>` mengontrol status code HTTP dan mengembalikan body JSON secara *type-safe*:
+* `Ok(data)` -> **200 OK**
+* `CreatedAtAction(...)` -> **201 Created**
+* `NoContent()` -> **204 No Content**
+* `BadRequest(error)` -> **400 Bad Request**
+* `NotFound(error)` -> **404 Not Found**
+
+### I. Standarisasi Response Envelope & Error Handling
+
+Proyek ini membungkus seluruh response HTTP menggunakan skema terstandar:
+
+1. **`ApiResponse<T>` (Single Item Response)**:
+   Membungkus hasil item tunggal dengan properti `success`, `message`, `data`, dan `statusCode`.
+
+2. **`PagedResponse<T>` (Paginated List Response)**:
+   Membungkus daftar data berhalaman dengan metadata pagination di dalam sub-object `paging`:
+   ```json
+   {
+     "success": true,
+     "message": "Sukses mengambil data",
+     "data": [ ... ],
+     "paging": {
+       "pageNumber": 1,
+       "pageSize": 10,
+       "totalPages": 2,
+       "totalRecords": 19,
+       "hasPreviousPage": false,
+       "hasNextPage": true
+     },
+     "statusCode": 200
+   }
+   ```
+
+3. **`ErrorResponse` (Machine-Readable Error Standard)**:
+   Seluruh error (Domain Validation, Model Binding, Resource Not Found, Server Error) mengembalikan struktur terpadu:
+   ```json
+   {
+     "success": false,
+     "statusCode": 400,
+     "errorCode": "INVALID_INPUT",
+     "message": "Format input atau validasi data tidak valid.",
+     "errors": [
+       { "field": "Title", "message": "The Title field is required." }
+     ],
+     "timestamp": "2026-09-14T10:45:00.123Z",
+     "traceId": "0HNOI2ALN6VVF:00000001"
+   }
+   ```
 
 ---
 
@@ -168,6 +224,7 @@ notes-api/
 ├── Makefile                           # Shortcut command (make build, make run, dll)
 ├── Notes.slnx                         # Solution file format XML (.NET 9/10)
 ├── docker-compose.yml                 # Konfigurasi container PostgreSQL & API
+├── playground.http                    # File pengujian REST API (VS Code REST Client / Rider)
 ├── src/
 │   ├── Notes.Domain/                  # Core Business Domain
 │   │   ├── Entities/
@@ -177,6 +234,11 @@ notes-api/
 │   ├── Notes.Application/             # Business Logic / Use Cases
 │   │   ├── Abstractions/
 │   │   │   └── INoteRepository.cs     # Interface kontrak repository
+│   │   ├── Common/
+│   │   │   └── Models/
+│   │   │       ├── ApiResponse.cs     # Single Item Response Envelope
+│   │   │       ├── PagedResponse.cs   # Paginated List Response Envelope
+│   │   │       └── PaginationParams.cs# Parameter Pagination (pageNumber & pageSize)
 │   │   ├── Notes/
 │   │   │   ├── NoteDtos.cs            # DTO Command & Response
 │   │   │   └── NoteService.cs         # Orchestrator Use Case
@@ -354,14 +416,107 @@ dotnet test
 | `dotnet test` | Menjalankan seluruh unit test dalam solution. |
 | `dotnet clean` | Membersihkan folder hasil build (`bin/` dan `obj/`). |
 | `dotnet publish -c Release` | Melakukan kompilasi production-ready ke folder output. |
+| `dotnet ef migrations add <NamaMigration> --project src/Notes.Infrastructure --startup-project src/Notes.Api` | Membuat file migrasi baru berdasarkan perubahan model EF Core. |
+| `dotnet ef database update --project src/Notes.Infrastructure --startup-project src/Notes.Api` | Menerapkan migrasi pending ke database target. |
 
 ---
 
-## 8. Tips & Langkah Selanjutnya untuk Production
+## 8. Manajeman Transaksi Database (`IUnitOfWork`) & Raw SQL Query Kompleks
 
-Project ini didesain sebagai **pembelajaran Clean Architecture yang bersih dan sederhana**. Untuk membawa proyek ini ke tingkat *production-ready*, berikut adalah rekomendasi langkah selanjutnya:
+### A. Database Transactions (`IUnitOfWork`)
 
-1. **EF Core Migrations**: Ganti `EnsureCreatedAsync()` dengan EF Core Migrations (`dotnet ef migrations add InitialCreate`) untuk mengontrol evolusi skema DB secara aman.
-2. **Keamanan Autentikasi**: Ganti Basic Authentication dengan **JWT (JSON Web Token)** atau **OAuth2 / OpenID Connect** dengan Hashed Passwords (seperti BCrypt / Argon2).
-3. **Pagination & Filtering**: Tambahkan parameter `page` dan `pageSize` pada endpoint `GET /api/v1/notes`.
-4. **Integration Testing**: Buat integration test menggunakan `WebApplicationFactory` dan container PostgreSQL sungguhan (via Testcontainers).
+Dalam Clean Architecture, ketika sebuah *use case* melakukan beberapa mutasi data (misalnya: membuat catatan, memperbarui counter, dan menambahkan log audit), kita harus menjamin bahwa **semua operasi berhasil bersamaan atau dibatalkan seluruhnya (*Atomicity*)**.
+
+- **Interface Abstraction**: [IUnitOfWork.cs](src/Notes.Application/Abstractions/IUnitOfWork.cs) di layer Application.
+- **Implementasi Concrete**: [UnitOfWork.cs](src/Notes.Infrastructure/Persistence/UnitOfWork.cs) di layer Infrastructure yang membungkus `IDbContextTransaction` dari EF Core.
+
+```csharp
+public async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken cancellationToken = default)
+{
+    using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+    try
+    {
+        await action();
+        await transaction.CommitAsync(cancellationToken);
+    }
+    catch
+    {
+        await transaction.RollbackAsync(cancellationToken);
+        throw;
+    }
+}
+```
+
+### B. Raw SQL Query Kompleks & Analitik (`Database.SqlQuery`)
+
+Meskipun LINQ EF Core sangat andal untuk operasi CRUD harian, query kompleks seperti **analitik, laporan bulanan, window functions, CTE, atau agregasi agregat berat** lebih efisien dan jelas jika ditulis menggunakan Raw SQL murni.
+
+Di .NET 8/9/10, EF Core menyediakan `Database.SqlQuery<T>($"""...""")` yang mendukung **String Interpolation Type-Safe** dan **otomatis terhindar dari SQL Injection** (karena string interpolated diubah menjadi `DbParameter`).
+
+Contoh di [NoteRepository.cs](src/Notes.Infrastructure/Repositories/NoteRepository.cs):
+
+```csharp
+public async Task<NoteAnalyticsResponse> GetAnalyticsAsync(CancellationToken cancellationToken = default)
+{
+    var monthlyStats = await context.Database.SqlQuery<MonthlyNoteStat>($"""
+        SELECT 
+            TO_CHAR("CreatedAt", 'YYYY-MM') AS "Month",
+            COUNT(*)::INT AS "TotalNotes",
+            COALESCE(SUM(array_length(regexp_split_to_array(TRIM("Content"), '\s+'), 1)), 0)::INT AS "TotalWords"
+        FROM notes
+        GROUP BY TO_CHAR("CreatedAt", 'YYYY-MM')
+        ORDER BY "Month" DESC
+    """).ToListAsync(cancellationToken);
+
+    var totalNotes = await context.Notes.CountAsync(cancellationToken);
+
+    return new NoteAnalyticsResponse(totalNotes, averageWords, monthlyStats);
+}
+```
+
+---
+
+## 9. EF Core Migrations: Konsep & Best Practices
+
+### A. Apa itu Migrations & Mengapa Penting?
+
+EF Core Migrations adalah fitur pelacak versi (*version control*) untuk skema database. Setiap kali Anda mengubah atribut entitas di C# (misalnya menambah kolom baru `Category`), Migrations membuatkan script C#/SQL delta untuk memperbarui database tanpa menghapus data yang ada.
+
+> [!WARNING]
+> Jangan gunakan `Database.EnsureCreatedAsync()` di *Production environment*! Method `EnsureCreatedAsync()` tidak membuat tabel `__EFMigrationsHistory`, sehingga Anda tidak dapat mengaplikasikan update skema di kemudian hari.
+
+### B. Implementasi `IDesignTimeDbContextFactory`
+
+Agar CLI `dotnet ef` dapat mendeteksi `AppDbContext` dari layer Infrastructure tanpa meng-instantiate seluruh Web API, kita menambahkan [AppDbContextFactory.cs](src/Notes.Infrastructure/Persistence/AppDbContextFactory.cs):
+
+```csharp
+public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+{
+    public AppDbContext CreateDbContext(string[] args)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        optionsBuilder.UseNpgsql("Host=localhost;Database=notesdb;Username=notesuser;Password=notespassword");
+        return new AppDbContext(optionsBuilder.Options);
+    }
+}
+```
+
+### C. Best Practices Deployment Migrations
+
+1. **Automated Migration on Startup**: Pada [Program.cs](src/Notes.Api/Program.cs), jalankan migrasi otomatis saat kontainer dinyalakan:
+   ```csharp
+   using var scope = app.Services.CreateScope();
+   var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+   await dbContext.Database.MigrateAsync();
+   ```
+2. **Kembangkan Skema Secara Non-Breaking**: Jika mengubah nama kolom, buat migrasi dengan alias/backward compatibility terlebih dahulu sebelum menghapus kolom lama.
+3. **Pemeriksaan Idempotent**: Gunakan script idempotent SQL (`dotnet ef migrations script --idempotent`) saat melakukan release via CI/CD pipeline Enterprise.
+
+---
+
+## 10. Tips & Langkah Selanjutnya untuk Production
+
+1. **Keamanan Autentikasi**: Ganti Basic Authentication dengan **JWT (JSON Web Token)** atau **OAuth2 / OpenID Connect** dengan Hashed Passwords (seperti BCrypt / Argon2).
+2. **Rate Limiting & Caching**: Gunakan `Microsoft.AspNetCore.RateLimiting` dan Caching (Redis / MemoryCache) pada query read-heavy seperti analytics.
+3. **Integration Testing**: Buat integration test menggunakan `WebApplicationFactory` dan container PostgreSQL sungguhan (via Testcontainers).
+

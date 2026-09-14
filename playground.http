@@ -1,0 +1,77 @@
+# ===================================================================
+# Notes API Playground (.http / REST Client)
+# ===================================================================
+# Berkas ini digunakan untuk melakukan pengujian REST API secara langsung
+# melalui VS Code (REST Client extension), JetBrains Rider, atau Visual Studio.
+
+@baseUrl = http://localhost:8080
+@username = admin
+@password = admin123
+
+### 1. Health Check
+# Mengecek status kesehatan aplikasi
+GET {{baseUrl}}/health
+
+### 2. Get Paged Notes (Default: Page 1, Size 10)
+# Mengambil daftar catatan berhalaman (memuat sub-object 'paging')
+GET {{baseUrl}}/api/v1/notes?pageNumber=1&pageSize=10
+Authorization: Basic {{username}} {{password}}
+
+### 3. Create Note (POST)
+# Membuat catatan baru dan menyimpan hasilnya di variabel response
+# @name createNote
+POST {{baseUrl}}/api/v1/notes
+Authorization: Basic {{username}} {{password}}
+Content-Type: application/json
+
+{
+  "title": "Belajar ASP.NET Core & C#",
+  "content": "Memahami Clean Architecture, EF Core 10, dan Standardized Response Envelope."
+}
+
+### 4. Get Note By ID
+# Mengambil catatan berdasarkan ID yang baru saja dibuat
+@noteId = {{createNote.response.body.data.id}}
+GET {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Basic {{username}} {{password}}
+
+### 5. Update Note (PUT)
+# Mengubah title dan content dari catatan
+PUT {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Basic {{username}} {{password}}
+Content-Type: application/json
+
+{
+  "title": "Belajar ASP.NET Core & C# (Updated)",
+  "content": "Sudah memahami Controller, Middleware, EF Core, Unit Testing, dan Pagination!"
+}
+
+### 6. Delete Note (DELETE)
+# Menghapus catatan berdasarkan ID
+DELETE {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Basic {{username}} {{password}}
+
+### 7. Test Tanpa Autentikasi (Expect 401 Unauthorized)
+# Pengujian tanpa menyertakan header Authorization
+GET {{baseUrl}}/api/v1/notes
+
+### 8. Test Validasi Request (Expect Standardized 400 ErrorResponse)
+# Judul diisi string kosong untuk menguji validasi data
+POST {{baseUrl}}/api/v1/notes
+Authorization: Basic {{username}} {{password}}
+Content-Type: application/json
+
+{
+  "title": "",
+  "content": "Konten valid tetapi judul kosong"
+}
+
+### 9. Test Data Tidak Ditemukan (Expect Standardized 404 ErrorResponse dengan errorCode NOTE_NOT_FOUND)
+GET {{baseUrl}}/api/v1/notes/00000000-0000-0000-0000-000000000000
+Authorization: Basic {{username}} {{password}}
+
+### 10. Get Analytics (Raw SQL Query & Aggregations)
+# Mengambil ringkasan analitik catatan (total notes, kata rata-rata, statistik bulanan)
+GET {{baseUrl}}/api/v1/notes/analytics
+Authorization: Basic {{username}} {{password}}
+
