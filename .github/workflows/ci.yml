@@ -15,12 +15,12 @@ jobs:
         image: postgres:17-alpine
         env:
           POSTGRES_DB: notesdb
-          POSTGRES_USER: notesuser
-          POSTGRES_PASSWORD: notespassword
+          POSTGRES_USER: notes
+          POSTGRES_PASSWORD: notes_dev_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U notes -d notesdb"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -43,7 +43,7 @@ jobs:
       - name: Run Unit & Integration Tests
         run: dotnet test --no-build -c Release --verbosity normal
         env:
-          ConnectionStrings__Default: "Host=localhost;Port=5432;Database=notesdb;Username=notesuser;Password=notespassword"
+          ConnectionStrings__Default: "Host=localhost;Port=5432;Database=notesdb;Username=notes;Password=notes_dev_password"
 
       - name: Verify Docker Build
         run: docker build -t notes-api:ci .
