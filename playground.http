@@ -1,77 +1,132 @@
 # ===================================================================
 # Notes API Playground (.http / REST Client)
 # ===================================================================
-# Berkas ini digunakan untuk melakukan pengujian REST API secara langsung
+# Berkas ini digunakan untuk pengujian interaktif REST API secara langsung
 # melalui VS Code (REST Client extension), JetBrains Rider, atau Visual Studio.
 
 @baseUrl = http://localhost:8080
 @username = admin
 @password = admin123
 
-### 1. Health Check
-# Mengecek status kesehatan aplikasi
+# ===================================================================
+# 1. Health Checks & Diagnostics
+# ===================================================================
+
+### 1.1 Health Check (Database & API Status)
 GET {{baseUrl}}/health
 
-### 2. Get Paged Notes (Default: Page 1, Size 10)
-# Mengambil daftar catatan berhalaman (memuat sub-object 'paging')
+
+# ===================================================================
+# 2. Authentication API (JWT Bearer & Refresh Tokens)
+# ===================================================================
+
+### 2.1 Register User Baru
+# @name registerUser
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "developer",
+  "email": "developer@example.com",
+  "password": "SecurePassword123!"
+}
+
+### 2.2 Login User & Dapatkan Access Token + Refresh Token
+# @name loginUser
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "developer",
+  "password": "SecurePassword123!"
+}
+
+### Variabel Token dari Response Login
+@jwtToken = {{loginUser.response.body.data.accessToken}}
+@refreshTokenStr = {{loginUser.response.body.data.refreshToken}}
+
+### 2.3 Refresh Access Token
+# @name refreshAuthToken
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshTokenStr}}"
+}
+
+
+# ===================================================================
+# 3. Notes Management API (Dengan Auth JWT Bearer)
+# ===================================================================
+
+### 3.1 Create Note (POST)
+# @name createNote
+POST {{baseUrl}}/api/v1/notes
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "title": "Belajar ASP.NET Core & Clean Architecture",
+  "content": "Memahami JWT Auth, Serilog, OpenTelemetry, EF Core Migrations, dan Optimistic Concurrency."
+}
+
+### Variabel Note ID dari Response Create
+@noteId = {{createNote.response.body.data.id}}
+
+### 3.2 Get Paged Notes Dengan Filter & Sorting
+# Mengambil daftar catatan dengan fitur pencarian kata kunci dan pengurutan dinamis
+GET {{baseUrl}}/api/v1/notes?pageNumber=1&pageSize=10&searchKeyword=Clean&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{jwtToken}}
+
+### 3.3 Get Note By ID
+GET {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Bearer {{jwtToken}}
+
+### 3.4 Update Note (PUT)
+PUT {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Bearer {{jwtToken}}
+Content-Type: application/json
+
+{
+  "title": "Belajar ASP.NET Core & Clean Architecture (Diperbarui)",
+  "content": "Sudah berhasil mengimplementasikan 15 item production improvement!"
+}
+
+### 3.5 Get Analytics (Raw SQL Query & Aggregations)
+GET {{baseUrl}}/api/v1/notes/analytics
+Authorization: Bearer {{jwtToken}}
+
+### 3.6 Delete Note (DELETE)
+DELETE {{baseUrl}}/api/v1/notes/{{noteId}}
+Authorization: Bearer {{jwtToken}}
+
+
+# ===================================================================
+# 4. Pengujian Compatibility Basic Auth (Bila Digunakan)
+# ===================================================================
+
+### 4.1 Get Paged Notes (Basic Auth)
 GET {{baseUrl}}/api/v1/notes?pageNumber=1&pageSize=10
 Authorization: Basic {{username}} {{password}}
 
-### 3. Create Note (POST)
-# Membuat catatan baru dan menyimpan hasilnya di variabel response
-# @name createNote
-POST {{baseUrl}}/api/v1/notes
-Authorization: Basic {{username}} {{password}}
-Content-Type: application/json
 
-{
-  "title": "Belajar ASP.NET Core & C#",
-  "content": "Memahami Clean Architecture, EF Core 10, dan Standardized Response Envelope."
-}
+# ===================================================================
+# 5. Pengujian Error Handling & Validasi (RFC 7807 Standard)
+# ===================================================================
 
-### 4. Get Note By ID
-# Mengambil catatan berdasarkan ID yang baru saja dibuat
-@noteId = {{createNote.response.body.data.id}}
-GET {{baseUrl}}/api/v1/notes/{{noteId}}
-Authorization: Basic {{username}} {{password}}
-
-### 5. Update Note (PUT)
-# Mengubah title dan content dari catatan
-PUT {{baseUrl}}/api/v1/notes/{{noteId}}
-Authorization: Basic {{username}} {{password}}
-Content-Type: application/json
-
-{
-  "title": "Belajar ASP.NET Core & C# (Updated)",
-  "content": "Sudah memahami Controller, Middleware, EF Core, Unit Testing, dan Pagination!"
-}
-
-### 6. Delete Note (DELETE)
-# Menghapus catatan berdasarkan ID
-DELETE {{baseUrl}}/api/v1/notes/{{noteId}}
-Authorization: Basic {{username}} {{password}}
-
-### 7. Test Tanpa Autentikasi (Expect 401 Unauthorized)
-# Pengujian tanpa menyertakan header Authorization
+### 5.1 Test Tanpa Autentikasi (Expect 401 Unauthorized)
 GET {{baseUrl}}/api/v1/notes
 
-### 8. Test Validasi Request (Expect Standardized 400 ErrorResponse)
-# Judul diisi string kosong untuk menguji validasi data
+### 5.2 Test Validasi Input Kosong (Expect 400 Bad Request)
 POST {{baseUrl}}/api/v1/notes
-Authorization: Basic {{username}} {{password}}
+Authorization: Bearer {{jwtToken}}
 Content-Type: application/json
 
 {
   "title": "",
-  "content": "Konten valid tetapi judul kosong"
+  "content": "Judul dikosongkan untuk menguji handler validasi."
 }
 
-### 9. Test Data Tidak Ditemukan (Expect Standardized 404 ErrorResponse dengan errorCode NOTE_NOT_FOUND)
+### 5.3 Test Resource Tidak Ditemukan (Expect 404 Not Found)
 GET {{baseUrl}}/api/v1/notes/00000000-0000-0000-0000-000000000000
-Authorization: Basic {{username}} {{password}}
-
-### 10. Get Analytics (Raw SQL Query & Aggregations)
-# Mengambil ringkasan analitik catatan (total notes, kata rata-rata, statistik bulanan)
-GET {{baseUrl}}/api/v1/notes/analytics
-Authorization: Basic {{username}} {{password}}
-
+Authorization: Bearer {{jwtToken}}
