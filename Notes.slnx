@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Notes.Application.Tests/Notes.Application.Tests.csproj" />
+    <Project Path="tests/Notes.IntegrationTests/Notes.IntegrationTests.csproj" />
   </Folder>
 </Solution>

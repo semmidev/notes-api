@@ -13,11 +13,13 @@ RUN dotnet restore src/Notes.Api/Notes.Api.csproj
 COPY src ./src
 RUN dotnet publish src/Notes.Api/Notes.Api.csproj -c Release -o /app/publish --no-restore
 
-# Stage 2: runtime image yang lebih kecil.
+# Stage 2: runtime image yang lebih kecil dan hardened.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 EXPOSE 8080
 
-COPY --from=build /app/publish .
+USER app
+
+COPY --from=build --chown=app:app /app/publish .
 
 ENTRYPOINT ["dotnet", "Notes.Api.dll"]

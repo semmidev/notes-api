@@ -25,6 +25,7 @@ public sealed class Note
     public string Content { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
+    public uint Version { get; private set; }
 
     public static Note Create(string title, string content)
     {

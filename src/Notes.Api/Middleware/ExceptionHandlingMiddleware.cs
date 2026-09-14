@@ -24,6 +24,24 @@ public sealed class ExceptionHandlingMiddleware(
                 "VALIDATION_ERROR",
                 ex.Message);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            logger.LogWarning(ex, "Akses ditolak / Kredensial tidak valid.");
+            await WriteErrorResponseAsync(
+                context,
+                StatusCodes.Status401Unauthorized,
+                "UNAUTHORIZED",
+                ex.Message);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
+        {
+            logger.LogWarning(ex, "Optimistic concurrency conflict terdeteksi.");
+            await WriteErrorResponseAsync(
+                context,
+                StatusCodes.Status409Conflict,
+                "CONCURRENCY_CONFLICT",
+                "Data telah diperbarui oleh sesi lain. Silakan muat ulang data terbaru.");
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unhandled exception pada request {Method} {Path}.", context.Request.Method, context.Request.Path);

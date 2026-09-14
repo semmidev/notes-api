@@ -374,22 +374,23 @@ Docker                     Docker
 PostgreSQL                 PostgreSQL
 ```
 
-## 13. Next improvement untuk production
+## 13. Production Improvements Implemented
 
-Project ini sengaja berhenti pada level **learning + clean baseline**. Langkah berikutnya yang bagus:
+Proyek ini telah secara lengkap mengimplementasikan 15 item peningkatan standar enterprise *production-ready*:
 
-1. EF Core migrations
-2. password hashing / external Identity Provider
-3. JWT / OAuth2 / OpenID Connect
-4. refresh token bila diperlukan
-5. pagination + filtering
-6. optimistic concurrency
-7. structured logging
-8. OpenTelemetry
-9. integration test PostgreSQL
-10. Docker image hardening
-11. health checks untuk database
-12. CI/CD
-13. secret management
-14. API versioning
-15. ProblemDetails yang lebih konsisten
+- [x] **1. EF Core migrations**: Menggunakan `AppDbContextFactory` dan `Database.MigrateAsync()` otomatis pada startup aplikasi.
+- [x] **2. Password Hashing**: Menggunakan hashing terenskripsi BCrypt (`BCrypt.Net-Next`) di `PasswordHasher.cs`.
+- [x] **3. JWT / OAuth2**: Implementasi JWT Bearer token authentication dengan `IJwtTokenGenerator` dan `AddJwtAuthentication`.
+- [x] **4. Refresh Token**: Dukungan refresh token persisten dengan rotasi token di `AuthService.cs` (`POST /api/v1/auth/refresh`).
+- [x] **5. Pagination & Filtering**: Filter pencarian judul/konten (`searchKeyword`) dan pengurutan dinamis (`sortBy`, `sortOrder`).
+- [x] **6. Optimistic Concurrency**: Penggunaan PostgreSQL `xmin` concurrency token untuk mendeteksi konflik edit bersamaan (`409 Conflict`).
+- [x] **7. Structured Logging**: Integrasi Serilog terstruktur berbasis JSON dan context tracking di `Program.cs`.
+- [x] **8. OpenTelemetry**: Telemetri standar OpenTelemetry untuk tracing & metrics ASP.NET Core & EF Core.
+- [x] **9. Integration Test**: Pengujian integrasi otomatis menggunakan `WebApplicationFactory<Program>` di `tests/Notes.IntegrationTests`.
+- [x] **10. Docker Image Hardening**: Runtime Dockerfile aman menggunakan non-root user `appuser` (UID 10001).
+- [x] **11. Health Checks**: Endpoint `/health` dengan verifikasi koneksi database EF Core (`AddDbContextCheck<AppDbContext>`).
+- [x] **12. CI/CD**: Workflow GitHub Actions otomatis di `.github/workflows/ci.yml`.
+- [x] **13. Secret Management**: Strongly typed configuration (`JwtOptions`, `BasicAuthOptions`) yang terisolasi aman.
+- [x] **14. API Versioning**: Versi API terstandar menggunakan `Asp.Versioning.Http` dan `Asp.Versioning.Mvc`.
+- [x] **15. Standardized ProblemDetails ErrorResponse**: Envelope kesalahan terpadu berstandar RFC 7807 dengan `traceId` correlation.
+

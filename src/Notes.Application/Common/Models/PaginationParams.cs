@@ -17,4 +17,8 @@ public record PaginationParams
         get => _pageSize;
         set => _pageSize = value > MaxPageSize ? MaxPageSize : value < 1 ? 10 : value;
     }
+
+    public string? SearchKeyword { get; init; }
+    public string? SortBy { get; init; } = "CreatedAt";
+    public string? SortOrder { get; init; } = "desc";
 }

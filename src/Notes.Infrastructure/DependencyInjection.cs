@@ -5,6 +5,8 @@ using Notes.Application.Abstractions;
 using Notes.Infrastructure.Persistence;
 using Notes.Infrastructure.Repositories;
 
+using Notes.Infrastructure.Security;
+
 namespace Notes.Infrastructure;
 
 public static class DependencyInjection
@@ -21,8 +23,13 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString);
         });
 
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+
         services.AddScoped<INoteRepository, NoteRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
         return services;
     }

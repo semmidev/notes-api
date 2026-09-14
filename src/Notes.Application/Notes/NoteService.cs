@@ -15,8 +15,7 @@ public sealed class NoteService(INoteRepository repository)
         CancellationToken cancellationToken)
     {
         var (notes, totalCount) = await repository.GetPagedAsync(
-            paginationParams.PageNumber,
-            paginationParams.PageSize,
+            paginationParams,
             cancellationToken);
 
         var responses = notes.Select(ToResponse).ToList();

@@ -3,22 +3,38 @@ using Notes.Application.Abstractions;
 using Notes.Domain.Entities;
 using Notes.Infrastructure.Persistence;
 
+using Notes.Application.Common.Models;
+
 namespace Notes.Infrastructure.Repositories;
 
 public sealed class NoteRepository(AppDbContext dbContext) : INoteRepository
 {
     public async Task<(IReadOnlyList<Note> Items, long TotalCount)> GetPagedAsync(
-        int pageNumber,
-        int pageSize,
+        PaginationParams paginationParams,
         CancellationToken cancellationToken)
     {
         var query = dbContext.Notes.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(paginationParams.SearchKeyword))
+        {
+            var keyword = paginationParams.SearchKeyword.Trim().ToLower();
+            query = query.Where(x => EF.Functions.Like(x.Title.ToLower(), $"%{keyword}%") ||
+                                     EF.Functions.Like(x.Content.ToLower(), $"%{keyword}%"));
+        }
+
+        query = (paginationParams.SortBy?.ToLower(), paginationParams.SortOrder?.ToLower()) switch
+        {
+            ("title", "asc") => query.OrderBy(x => x.Title),
+            ("title", "desc") => query.OrderByDescending(x => x.Title),
+            ("createdat", "asc") => query.OrderBy(x => x.CreatedAt),
+            _ => query.OrderByDescending(x => x.CreatedAt)
+        };
+
         var totalCount = await query.LongCountAsync(cancellationToken);
 
         var items = await query
-            .OrderByDescending(x => x.CreatedAt)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
+            .Skip((paginationParams.PageNumber - 1) * paginationParams.PageSize)
+            .Take(paginationParams.PageSize)
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);

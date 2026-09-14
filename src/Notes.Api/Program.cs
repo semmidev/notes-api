@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Notes.Api.Extensions;
@@ -5,10 +6,18 @@ using Notes.Api.Middleware;
 using Notes.Application.Common.Models;
 using Notes.Infrastructure;
 using Notes.Infrastructure.Persistence;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration otomatis membaca appsettings + environment variables.
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
+
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -32,14 +41,33 @@ builder.Services.AddControllers()
         };
     });
 
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+}).AddMvc().AddApiExplorer();
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>("database");
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation());
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddBasicAuthentication(builder.Configuration);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
-// Middleware custom diletakkan sebelum endpoint agar exception dari layer bawah
-// bisa diubah menjadi HTTP response yang konsisten.
+app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseStatusCodePages(async statusCodeContext =>
@@ -80,17 +108,18 @@ app.UseStatusCodePages(async statusCodeContext =>
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapHealthChecks("/health");
 app.MapControllers();
 
-// Eksekusi EF Core Migrations secara otomatis pada startup aplikasi.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
 }
 
 app.Run();
 
-// Dibutuhkan integration test untuk mengambil entry point aplikasi.
 public partial class Program;
